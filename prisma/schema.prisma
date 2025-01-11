@@ -1,0 +1,220 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+///
+/// USER
+///
+/// - Holds basic profile information.
+/// - `account`: One-to-one with Account (foreign key is in `Account`).
+/// - `tracks`: One-to-many with Track (foreign key is in `Track`).
+/// - `stats`: One-to-one with UserStats (foreign key is in `UserStats`).
+/// - `currentTrack`: One-to-one with CurrentTrack (foreign key is in `CurrentTrack`).
+/// - `groups`: Many-to-many with Group (implicit pivot managed by Prisma).
+/// - `friendshipsAsUser` & `friendshipsAsFriend`: Self-relation pivot (Friendship).
+/// - `sentFriendRequests` & `receivedFriendRequests`: One-to-many with FriendRequest.
+///
+model User {
+  id                     String           @id @default(uuid()) @db.Uuid
+  name                   String?
+  email                  String?         @unique
+  emailVerified          DateTime?
+  image                  String?
+  lastFullAuth           DateTime?
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+
+  /// 1:1 with Account (the foreign key is on Account.userId)
+  account                Account?
+
+  /// 1:Many with Track (the foreign key is on Track.userId)
+  tracks                 Track[]
+
+  /// 1:1 with UserStats (the foreign key is on UserStats.userId)
+  stats                  UserStats?
+
+  /// 1:1 with CurrentTrack (the foreign key is on CurrentTrack.userId)
+  currentTrack           CurrentTrack?
+
+  /// Many-to-many with Group (managed by Prisma with an implicit pivot)
+  groups                 Group[]         @relation("GroupMembers")
+
+  /// Self-relation pivot references in Friendship
+  friendshipsAsUser      Friendship[]    @relation("FriendshipsAsUser")
+  friendshipsAsFriend    Friendship[]    @relation("FriendshipsAsFriend")
+
+  /// One-to-many with FriendRequest (foreign keys are fromUserId, toUserId in FriendRequest)
+  sentFriendRequests     FriendRequest[] @relation("SentFriendRequests")
+  receivedFriendRequests FriendRequest[] @relation("ReceivedFriendRequests")
+}
+
+///
+/// CURRENTTRACK
+///
+/// - Represents the user's currently playing track.
+/// - One-to-one with User: we store the FK in `CurrentTrack.userId`.
+/// - Must be `@unique` to guarantee only one current track per user.
+/// - Contains fields to track in-progress listening data:
+///   `timestamp`, `totalMs`, plus string[] fields for Spotify "actions."
+///
+model CurrentTrack {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @unique @db.Uuid
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name           String
+  artist         String?
+  album          String?
+  trackUri       String?   // e.g., "spotify:track:<TRACK_ID>"
+  imageUrl       String?
+
+  timestamp      Int       // last-read progress (ms) into the track
+  totalMs        Int       // total ms the track has been playing since last start
+
+  currentActions String[]  // current action flags from Spotify "actions"
+  lastActions    String[]  // previous action flags
+
+  startedAt      DateTime  @default(now())
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @default(now())
+}
+
+///
+/// ACCOUNT
+///
+/// - One-to-one with User: we store the FK in `Account.userId`.
+/// - Must be `@unique` to ensure one account per user.
+/// - Contains OAuth and token info from Spotify.
+///
+model Account {
+  id                String   @id @default(uuid()) @db.Uuid
+  userId            String   @unique @db.Uuid
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  provider          String
+  providerAccountId String
+  type              String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @default(now())
+
+  @@unique([provider, providerAccountId])
+}
+
+///
+/// USERSTATS
+///
+/// - One-to-one with User: foreign key stored in `UserStats.userId`.
+/// - Tracks aggregated listening stats (e.g., totalMs, totalStreams).
+///
+model UserStats {
+  id                   String   @id @default(uuid()) @db.Uuid
+  userId               String   @unique @db.Uuid
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  dateCreatedSpotify   DateTime
+  totalMs              Int      @default(0)
+  totalStreams         Int      @default(0)
+}
+
+///
+/// TRACK
+///
+/// - Represents a single “session” or instance of the user listening to a track.
+/// - One-to-many with User (the foreign key is in `Track.userId`).
+///
+model Track {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @db.Uuid
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name           String
+  artist         String?
+  album          String?
+  trackUri       String?
+  imageUrl       String?
+
+  msPlayed       Int?     // time listened in this session
+  totalMsPlayed  Int      @default(0) // optional aggregator
+  datePlayed     DateTime?
+  ts             DateTime
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @default(now())
+}
+
+///
+/// FRIENDSHIP
+///
+/// - Pivot table for self-relation (User <-> User).
+/// - `userId` references `User.id` (relation name: "FriendshipsAsUser").
+/// - `friendId` references `User.id` (relation name: "FriendshipsAsFriend").
+/// - We use `@@unique([userId, friendId])` to avoid duplicates.
+///
+model Friendship {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  friendId  String   @db.Uuid
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+
+  user      User     @relation("FriendshipsAsUser", fields: [userId], references: [id])
+  friend    User     @relation("FriendshipsAsFriend", fields: [friendId], references: [id])
+
+  @@unique([userId, friendId])
+}
+
+///
+/// FRIEND REQUEST
+///
+/// - One-to-many with User:
+///   - `fromUserId` references `User.id` via "SentFriendRequests"
+///   - `toUserId` references `User.id` via "ReceivedFriendRequests"
+/// - We use `@@unique([fromUserId, toUserId])` to avoid multiple requests to the same user.
+///
+model FriendRequest {
+  id         String   @id @default(uuid()) @db.Uuid
+  fromUserId String   @db.Uuid
+  toUserId   String   @db.Uuid
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now())
+
+  fromUser   User     @relation("SentFriendRequests", fields: [fromUserId], references: [id])
+  toUser     User     @relation("ReceivedFriendRequests", fields: [toUserId], references: [id])
+
+  @@unique([fromUserId, toUserId])
+}
+
+///
+/// GROUP
+///
+/// - Many-to-many with User. Prisma creates an implicit pivot table under the hood.
+/// - A Group can have multiple members, and a User can be in multiple Groups.
+///
+model Group {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  imageUrl  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+
+  members   User[]   @relation("GroupMembers")
+}
