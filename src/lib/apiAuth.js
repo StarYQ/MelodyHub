@@ -1,11 +1,11 @@
 // src/lib/apiAuth.js
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { createClient } from '@/utils/supabase/server';
 import prisma from './prisma';
 
+
+// To use in any server-based API route to retrieve the current user.
 export async function getUserFromApiRoute() {
-  const cookieStore = await cookies();
-  const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+  const supabase = await createClient();
 
   const {
     data: { user },
@@ -13,16 +13,18 @@ export async function getUserFromApiRoute() {
   } = await supabase.auth.getUser();
 
   if (error) {
-    console.error('Error fetching user from route:', error);
+    console.error('Error fetching user:', error);
     return null;
   }
 
   if (user) {
-    const userData = await prisma.user.findUnique({ where: { id: user.id } });
+    const userData = await prisma.user.findUnique({
+      where: { id: user.id },
+    });
     if (userData) {
-      // merge Supabase and Prisma user data
       return { ...user, ...userData };
     }
   }
+
   return null;
 }

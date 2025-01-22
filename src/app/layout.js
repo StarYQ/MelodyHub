@@ -1,6 +1,6 @@
 // src/app/layout.js
-import { getUser } from '../lib/auth';
-import { UserProvider } from '../context/UserContext';
+import { getUser } from '@/lib/auth';
+import { UserProvider } from '@/context/UserContext';
 
 export const metadata = {
   title: 'MelodyHub',

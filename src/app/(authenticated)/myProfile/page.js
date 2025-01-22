@@ -1,7 +1,7 @@
 // src/app/(authenticated)/myProfile/page.js
-import { getUser } from '../../../lib/auth';
+import { getUser } from '@/lib/auth';
 import styles from './myProfile.module.css';
-import Navbar from '../../../components/Navbar';
+import Navbar from '@/components/Navbar';
 
 export const metadata = {
   title: 'My Profile - MelodyHub',

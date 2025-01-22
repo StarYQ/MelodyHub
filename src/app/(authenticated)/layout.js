@@ -1,5 +1,5 @@
 // src/app/(authenticated)/layout.js
-import { getUser } from '../../lib/auth';
+import { getUser } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 
 export default async function AuthLayout({ children }) {

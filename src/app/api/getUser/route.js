@@ -1,6 +1,6 @@
 // src/app/api/getUser/route.js
 import { NextResponse } from 'next/server';
-import { getUserFromApiRoute } from '../../../lib/apiAuth';
+import { getUserFromApiRoute } from '@/lib/apiAuth';
 
 export const dynamic = 'force-dynamic';
 

@@ -1,24 +1,16 @@
 // src/lib/auth.js
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import prisma from './prisma';
+import { createClient } from '@/utils/supabase/server';
 
 export async function getUser() {
-  const cookieStore = await cookies();
-  const supabase = createServerComponentClient({ cookies: () => cookieStore });
-
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
-
+  const supabase = await createClient(); 
+  const { data: { user }, error } = await supabase.auth.getUser();
   if (error) {
     console.error('Error fetching user:', error);
     return null;
   }
-
   if (user) {
-    // find a user with matching ID in custom Users table
     const userData = await prisma.user.findUnique({
       where: { id: user.id },
     });
@@ -26,6 +18,5 @@ export async function getUser() {
       return { ...user, ...userData };
     }
   }
-
   return null;
 }

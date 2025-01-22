@@ -1,7 +1,7 @@
 // src/app/auth/callback/route.js
+//NOTE: THIS FILE IS NOT ACTUALLY BEING USED
 import { NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
 import { PrismaClient } from '@prisma/client';
 
 export const dynamic = 'force-dynamic';
