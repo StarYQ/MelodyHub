@@ -1,2 +1,2 @@
 # MelodyHub
-Uses a spotify account that uses your track history and aggregates them into readable and fun stats like average hours listened to per day or top artists by minutes/plays.
+Using Next.js and the Spotify API, develop a web application that tracks users' listening history to generate fun, readable statistics. Users can also connect with friends to compare stats or form groups to view shared, group-based statistics. Via LLM integration, there will also be an option for users to inquire or converse about their stats through an AI chatbot feature.
