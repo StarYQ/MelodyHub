@@ -14,6 +14,8 @@ export default async function MyProfile() {
     return <div className={styles.container}>Loading...</div>;
   }
 
+  const profile = await fetchProfile()
+
   return (
     <div className={styles.container}>
       <Navbar user={user} />

@@ -1,5 +1,4 @@
 // src/lib/auth.js
-import { cookies } from 'next/headers';
 import prisma from './prisma';
 import { createClient } from '@/utils/supabase/server';
 
