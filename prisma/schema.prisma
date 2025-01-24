@@ -26,37 +26,61 @@ enum Role {
 /// - `sentFriendRequests` & `receivedFriendRequests`: One-to-many with FriendRequest.
 ///
 model User {
-  id                     String           @id @default(uuid()) @db.Uuid
-  name                   String?
-  email                  String?         @unique
-  emailVerified          DateTime?
-  image                  String?
-  lastFullAuth           DateTime?
-  createdAt              DateTime        @default(now())
-  updatedAt              DateTime        @updatedAt
+  id            String    @id @default(uuid()) @db.Uuid
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  lastFullAuth  DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   /// 1:1 with Account (the foreign key is on Account.userId)
-  account                Account?
+  account Account?
 
   /// 1:Many with Track (the foreign key is on Track.userId)
-  tracks                 Track[]
+  tracks Track[]
 
   /// 1:1 with UserStats (the foreign key is on UserStats.userId)
-  stats                  UserStats?
+  stats UserStats?
 
   /// 1:1 with CurrentTrack (the foreign key is on CurrentTrack.userId)
-  currentTrack           CurrentTrack?
+  currentTrack CurrentTrack?
 
   /// Many-to-many with Group (managed by Prisma with an implicit pivot)
-  groups                 Group[]         @relation("GroupMembers")
+  groups Group[] @relation("GroupMembers")
 
   /// Self-relation pivot references in Friendship
-  friendshipsAsUser      Friendship[]    @relation("FriendshipsAsUser")
-  friendshipsAsFriend    Friendship[]    @relation("FriendshipsAsFriend")
+  friendshipsAsUser   Friendship[] @relation("FriendshipsAsUser")
+  friendshipsAsFriend Friendship[] @relation("FriendshipsAsFriend")
 
   /// One-to-many with FriendRequest (foreign keys are fromUserId, toUserId in FriendRequest)
   sentFriendRequests     FriendRequest[] @relation("SentFriendRequests")
   receivedFriendRequests FriendRequest[] @relation("ReceivedFriendRequests")
+  SpotifyAccount         SpotifyAccount?
+}
+
+model SpotifyAccount {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @unique @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Encrypted token storage
+  access_token  String
+  refresh_token String
+  expires_at    DateTime // Token expiration timestamp
+
+  // Spotify-specific identifiers
+  spotify_user_id String @unique
+  scope           String // Stores granted scopes
+
+  // Timestamps
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  // Add indexes for common queries
+  @@index([userId])
+  @@index([spotify_user_id])
 }
 
 ///
@@ -69,25 +93,25 @@ model User {
 ///   `timestamp`, `totalMs`, plus string[] fields for Spotify "actions."
 ///
 model CurrentTrack {
-  id             String   @id @default(uuid()) @db.Uuid
-  userId         String   @unique @db.Uuid
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @unique @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  name           String
-  artist         String?
-  album          String?
-  trackUri       String?   // e.g., "spotify:track:<TRACK_ID>"
-  imageUrl       String?
+  name     String
+  artist   String?
+  album    String?
+  trackUri String? // e.g., "spotify:track:<TRACK_ID>"
+  imageUrl String?
 
-  timestamp      Int       // last-read progress (ms) into the track
-  totalMs        Int       // total ms the track has been playing since last start
+  timestamp Int // last-read progress (ms) into the track
+  totalMs   Int // total ms the track has been playing since last start
 
-  currentActions String[]  // current action flags from Spotify "actions"
-  lastActions    String[]  // previous action flags
+  currentActions String[] // current action flags from Spotify "actions"
+  lastActions    String[] // previous action flags
 
-  startedAt      DateTime  @default(now())
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @default(now())
+  startedAt DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
 }
 
 ///
@@ -98,23 +122,20 @@ model CurrentTrack {
 /// - Contains OAuth and token info from Spotify.
 ///
 model Account {
-  id                String   @id @default(uuid()) @db.Uuid
-  userId            String   @unique @db.Uuid
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @unique @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   provider          String
   providerAccountId String
   type              String
-  refresh_token     String?
-  access_token      String?
-  expires_at        Int?
   token_type        String?
   scope             String?
   id_token          String?
   session_state     String?
 
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
 
   @@unique([provider, providerAccountId])
 }
@@ -126,13 +147,13 @@ model Account {
 /// - Tracks aggregated listening stats (e.g., totalMs, totalStreams).
 ///
 model UserStats {
-  id                   String   @id @default(uuid()) @db.Uuid
-  userId               String   @unique @db.Uuid
-  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @unique @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  dateCreatedSpotify   DateTime
-  totalMs              Int      @default(0)
-  totalStreams         Int      @default(0)
+  dateCreatedSpotify DateTime
+  totalMs            Int      @default(0)
+  totalStreams       Int      @default(0)
 }
 
 ///
@@ -142,23 +163,23 @@ model UserStats {
 /// - One-to-many with User (the foreign key is in `Track.userId`).
 ///
 model Track {
-  id             String   @id @default(uuid()) @db.Uuid
-  userId         String   @db.Uuid
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  name           String
-  artist         String?
-  album          String?
-  trackUri       String?
-  imageUrl       String?
+  name     String
+  artist   String?
+  album    String?
+  trackUri String?
+  imageUrl String?
 
-  msPlayed       Int?     // time listened in this session
-  totalMsPlayed  Int      @default(0) // optional aggregator
-  datePlayed     DateTime?
-  ts             DateTime
+  msPlayed      Int? // time listened in this session
+  totalMsPlayed Int       @default(0) // optional aggregator
+  datePlayed    DateTime?
+  ts            DateTime
 
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
 }
 
 ///
@@ -176,8 +197,8 @@ model Friendship {
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now())
 
-  user      User     @relation("FriendshipsAsUser", fields: [userId], references: [id])
-  friend    User     @relation("FriendshipsAsFriend", fields: [friendId], references: [id])
+  user   User @relation("FriendshipsAsUser", fields: [userId], references: [id])
+  friend User @relation("FriendshipsAsFriend", fields: [friendId], references: [id])
 
   @@unique([userId, friendId])
 }
@@ -197,8 +218,8 @@ model FriendRequest {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @default(now())
 
-  fromUser   User     @relation("SentFriendRequests", fields: [fromUserId], references: [id])
-  toUser     User     @relation("ReceivedFriendRequests", fields: [toUserId], references: [id])
+  fromUser User @relation("SentFriendRequests", fields: [fromUserId], references: [id])
+  toUser   User @relation("ReceivedFriendRequests", fields: [toUserId], references: [id])
 
   @@unique([fromUserId, toUserId])
 }
@@ -216,5 +237,5 @@ model Group {
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now())
 
-  members   User[]   @relation("GroupMembers")
+  members User[] @relation("GroupMembers")
 }

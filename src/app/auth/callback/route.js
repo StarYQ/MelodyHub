@@ -1,30 +1,56 @@
+// app/api/auth/callback/route.js
 import { NextResponse } from 'next/server'
-// The client you created from the Server-Side Auth instructions
 import { createClient } from '@/utils/supabase/server'
+import { getToken } from '@/lib/spotify'
 
 export async function GET(request) {
   const { searchParams, origin } = new URL(request.url)
-  const code = searchParams.get('code')
-  // if "next" is in param, use it as the redirect URL
+  const supabaseCode = searchParams.get('code')
+  const spotifyCode = searchParams.get('spotify_code')
   const next = searchParams.get('next') ?? '/'
 
-  if (code) {
+  // Handle Supabase auth callback
+  if (supabaseCode) {
     const supabase = await createClient()
-    const { error } = await supabase.auth.exchangeCodeForSession(code)
-    if (!error) {
-      const forwardedHost = request.headers.get('x-forwarded-host') // original origin before load balancer
-      const isLocalEnv = process.env.NODE_ENV === 'development'
-      if (isLocalEnv) {
-        // we can be sure that there is no load balancer in between, so no need to watch for X-Forwarded-Host
-        return NextResponse.redirect(`${origin}${next}`)
-      } else if (forwardedHost) {
-        return NextResponse.redirect(`https://${forwardedHost}${next}`)
-      } else {
-        return NextResponse.redirect(`${origin}${next}`)
+    const { error } = await supabase.auth.exchangeCodeForSession(supabaseCode)
+    
+    if (error) {
+      return NextResponse.redirect(`${origin}/auth/auth-code-error`)
+    }
+
+    // After successful Supabase auth, check for Spotify code
+    if (spotifyCode) {
+      try {
+        // Exchange Spotify authorization code for tokens
+        const { access_token, refresh_token } = await getToken(spotifyCode)
+        
+        // Store Spotify tokens in Supabase
+        const { error: storageError } = await supabase
+          .from('user_spotify_tokens')
+          .upsert({
+            user_id: (await supabase.auth.getUser()).data.user.id,
+            access_token,
+            refresh_token,
+            updated_at: new Date().toISOString()
+          })
+
+        if (storageError) throw storageError
+
+      } catch (error) {
+        console.error('Spotify token storage failed:', error)
+        return NextResponse.redirect(`${origin}/auth/auth-code-error`)
       }
     }
+
+    // Handle redirects
+    const forwardedHost = request.headers.get('x-forwarded-host')
+    const isLocalEnv = process.env.NODE_ENV === 'development'
+    
+    const redirectUrl = isLocalEnv ? `${origin}${next}` :
+      forwardedHost ? `https://${forwardedHost}${next}` : `${origin}${next}`
+
+    return NextResponse.redirect(redirectUrl)
   }
 
-  // return the user to an error page with instructions
   return NextResponse.redirect(`${origin}/auth/auth-code-error`)
 }
