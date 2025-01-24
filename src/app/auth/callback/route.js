@@ -1,67 +1,30 @@
-// src/app/auth/callback/route.js
-//NOTE: THIS FILE IS NOT ACTUALLY BEING USED
-import { NextResponse } from 'next/server';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { PrismaClient } from '@prisma/client';
-
-export const dynamic = 'force-dynamic';
-
-const prisma = new PrismaClient();
+import { NextResponse } from 'next/server'
+// The client you created from the Server-Side Auth instructions
+import { createClient } from '@/utils/supabase/server'
 
 export async function GET(request) {
-  const { searchParams, origin } = new URL(request.url);
-  const code = searchParams.get('code');
-  const next = searchParams.get('next') ?? '/';
-  const authType = searchParams.get('authType') ?? 'login';
+  const { searchParams, origin } = new URL(request.url)
+  const code = searchParams.get('code')
+  // if "next" is in param, use it as the redirect URL
+  const next = searchParams.get('next') ?? '/'
 
-  if (!code) {
-    return NextResponse.redirect(`${origin}/auth/auth-code-error`);
-  }
-
-  // 1) Exchange the code for a session
-
-  const cookieStore = await cookies();
-  const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
-  const { error } = await supabase.auth.exchangeCodeForSession(code);
-  if (error) {
-    console.error('Error exchanging code for session:', error);
-    return NextResponse.redirect(`${origin}/auth/auth-code-error`);
-  }
-
-  // 2) Now that we have a session, fetch the user from Supabase
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError || !user) {
-    console.error('Error fetching user after OAuth:', userError);
-    return NextResponse.redirect(`${origin}/auth/auth-code-error`);
-  }
-
-  // 3) Check or create user in Prisma
-  try {
-    const existingUser = await prisma.user.findUnique({
-      where: { id: user.id },
-    });
-    if (!existingUser) {
-      await prisma.user.create({
-        data: {
-          id: user.id,
-          email: user.email,
-          name:
-            user.user_metadata?.full_name ||
-            user.email?.split('@')[0] ||
-            '',
-        },
-      });
-      console.log('Created user in DB');
+  if (code) {
+    const supabase = await createClient()
+    const { error } = await supabase.auth.exchangeCodeForSession(code)
+    if (!error) {
+      const forwardedHost = request.headers.get('x-forwarded-host') // original origin before load balancer
+      const isLocalEnv = process.env.NODE_ENV === 'development'
+      if (isLocalEnv) {
+        // we can be sure that there is no load balancer in between, so no need to watch for X-Forwarded-Host
+        return NextResponse.redirect(`${origin}${next}`)
+      } else if (forwardedHost) {
+        return NextResponse.redirect(`https://${forwardedHost}${next}`)
+      } else {
+        return NextResponse.redirect(`${origin}${next}`)
+      }
     }
-  } catch (dbErr) {
-    console.error('Error handling user in DB:', dbErr);
-    return NextResponse.redirect(`${origin}/auth/auth-code-error`);
   }
 
-  // 4) Redirect after successful OAuth
-  return NextResponse.redirect(`${origin}${next}`);
+  // return the user to an error page with instructions
+  return NextResponse.redirect(`${origin}/auth/auth-code-error`)
 }
